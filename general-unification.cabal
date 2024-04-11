@@ -40,7 +40,7 @@ maintainer:         moncrief@oregonstate.edu
 -- A copyright notice.
 -- copyright:
 category:           Logic
-build-type:         Simple
+-- build-type:         Simple
 
 -- Extra doc files to be distributed with the package, such as a CHANGELOG or a README.
 extra-doc-files:    CHANGELOG.md
@@ -53,10 +53,21 @@ common warnings
 
 library
     -- Import common warning flags.
-    import:           warnings
+    -- import:           warnings
 
     -- Modules exported by the library.
-    exposed-modules:  MyLib
+    exposed-modules:
+        MyLib
+        Logic.Unification.GULRS.Parser
+        Logic.Unification.GULRS.Syntax
+        Logic.Unification.GULRS.Runner
+        Logic.Unification.GULRS.Unification
+        Logic.Unification
+        Logic.Unification.Basic
+        Control.Unification
+        Control.Safe
+        Data.Unification
+
 
     -- Modules included in this library but not exported.
     -- other-modules:
@@ -65,10 +76,26 @@ library
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1
+    build-depends:
+        base,
+        transformers,
+        containers,
+        parsec,
+        mtl,
+        text,
+        logic,
 
     -- Directories containing source files.
-    hs-source-dirs:   src
+    hs-source-dirs:
+        src,
+        src/Logic,
+        src/Logic/Unification,
+        src/Logic/Unification/GULRS,
+        src/Control,
+        src/Data
+        -- src/Control/Monad,
+        -- src/Control/Monad/Unify,
+        -- src/Control/Monad/State
 
     -- Base language which the package is written in.
     default-language: GHC2021
