@@ -211,27 +211,27 @@ ej4 = mkEntailJ rs1 (Term "friends" [lit "Alice",Var "c"])
 
 
 
-toGurls :: Term v -> GULRS.Term v
-toGurls (Var v) = GULRS.Var v
-toGurls (Term k ts) = GULRS.TQry k (map toGurls ts)
+toGulrs :: Term v -> GULRS.Term v
+toGulrs (Var v) = GULRS.Var v
+toGulrs (Term k ts) = GULRS.TQry k (map toGulrs ts)
 
-toGurlsRule :: Rule v -> GULRS.Rule v
-toGurlsRule (Rule n c ps) = GULRS.Rule n (toGurls c) (map toGurls ps)
+toGulrsRule :: Rule v -> GULRS.Rule v
+toGulrsRule (Rule n c ps) = GULRS.Rule n (toGulrs c) (map toGulrs ps)
 
-toGurlsSystem :: RuleSystem v -> GULRS.RuleSystem v
-toGurlsSystem = map toGurlsRule
+toGulrsSystem :: RuleSystem v -> GULRS.RuleSystem v
+toGulrsSystem = map toGulrsRule
 
-fromGurls :: GULRS.Term v -> Term v
-fromGurls (GULRS.Var v) = Var v
-fromGurls (GULRS.TQry k ts) = Term k (map fromGurls ts)
-fromGurls (GULRS.TInt i) = Term (show i) []
-fromGurls (GULRS.TStr s) = Term s []
+fromGulrs :: GULRS.Term v -> Term v
+fromGulrs (GULRS.Var v) = Var v
+fromGulrs (GULRS.TQry k ts) = Term k (map fromGulrs ts)
+fromGulrs (GULRS.TInt i) = Term (show i) []
+fromGulrs (GULRS.TStr s) = Term s []
 
-fromGurlsRule :: GULRS.Rule v -> Rule v
-fromGurlsRule (GULRS.Rule n c ps) = Rule n (fromGurls c) (map fromGurls ps)
+fromGulrsRule :: GULRS.Rule v -> Rule v
+fromGulrsRule (GULRS.Rule n c ps) = Rule n (fromGulrs c) (map fromGulrs ps)
 
-fromGurlsSystem :: GULRS.RuleSystem v -> RuleSystem v
-fromGurlsSystem = map fromGurlsRule
+fromGulrsSystem :: GULRS.RuleSystem v -> RuleSystem v
+fromGulrsSystem = map fromGulrsRule
 
 
 
