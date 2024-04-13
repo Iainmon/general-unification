@@ -16,6 +16,9 @@ import Data.List (find, intercalate)
 import Control.Monad (guard)
 
 
+import qualified Logic.Unification.GULRS.Syntax as GULRS
+import qualified Logic.Unification.GULRS.Parser as GURLS.Parser
+
 
 type Name = String
 
@@ -205,6 +208,30 @@ ej4 = mkEntailJ rs1 (Term "friends" [lit "Alice",Var "c"])
 --   compose :: s -> s -> s
 --   -- (<.>) = compose
 --   -- (t <. tau) <. sgm = t <. (sgm <.> tau)
+
+
+
+toGurls :: Term v -> GULRS.Term v
+toGurls (Var v) = GULRS.Var v
+toGurls (Term k ts) = GULRS.TQry k (map toGurls ts)
+
+toGurlsRule :: Rule v -> GULRS.Rule v
+toGurlsRule (Rule n c ps) = GULRS.Rule n (toGurls c) (map toGurls ps)
+
+toGurlsSystem :: RuleSystem v -> GULRS.RuleSystem v
+toGurlsSystem = map toGurlsRule
+
+fromGurls :: GULRS.Term v -> Term v
+fromGurls (GULRS.Var v) = Var v
+fromGurls (GULRS.TQry k ts) = Term k (map fromGurls ts)
+fromGurls (GULRS.TInt i) = Term (show i) []
+fromGurls (GULRS.TStr s) = Term s []
+
+fromGurlsRule :: GULRS.Rule v -> Rule v
+fromGurlsRule (GULRS.Rule n c ps) = Rule n (fromGurls c) (map fromGurls ps)
+
+fromGurlsSystem :: GULRS.RuleSystem v -> RuleSystem v
+fromGurlsSystem = map fromGurlsRule
 
 
 
