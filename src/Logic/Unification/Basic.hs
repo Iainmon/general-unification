@@ -1,5 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
-
+{-# LANGUAGE NamedFieldPuns #-}
 
 module Logic.Unification.Basic where
 
@@ -12,7 +12,8 @@ import qualified Data.Map as Map
 import Data.Map (Map)
 
 import Control.Safe
-import Data.List (find)
+import Data.List (find, intercalate)
+import Control.Monad (guard)
 
 
 
@@ -64,6 +65,10 @@ compose σ τ = (Map.map (apply σ) τ) `Map.union` (σ \\ τ)
 (<.>) :: Ord v => Subst v -> Subst v -> Subst v
 (<.>) = compose
 
+fromList :: Ord v => [(v,Term v)] -> Subst v
+fromList = foldr (compose . uncurry mapsTo) empty
+
+
 ammend :: Ord v => Subst v -> v -> Term v -> Subst v
 ammend σ x t = σ <.> mapsTo x t
 
@@ -96,29 +101,87 @@ type BRuleSystem = RuleSystem Name
 lookupRule :: Name -> RuleSystem v -> Maybe (Rule v)
 lookupRule n = find (\r -> n == nameR r)
 
+
+
+
 data EntailJ v
   = EntailJ { system :: RuleSystem v
             , goal :: Term v
             , rule :: Rule v -- bindings can be found via the rule and goal
             , bindings :: Subst v
             }
-  deriving (Eq, Ord, Functor)
+  deriving (Eq, Ord)
+
+mkEntailJ :: RuleSystem v -> Term v -> EntailJ v
+mkEntailJ rs g = EntailJ rs g (Rule "Ax" g []) empty
+
+safeUnify :: Ord v => Term v -> Term v -> Maybe (Subst v)
+safeUnify t t' = do
+  σ <- safe $ unifyOne t t'
+  guard $ t <. σ == t' <. σ
+  return σ
+
+applySystem :: Ord v => RuleSystem v -> Term v -> [(Rule v,Subst v)]
+applySystem rs t = [(r,σ) | r <- rs, Just σ <- [safeUnify t (conclusionR r)]]
+
+applyRuleSubst :: Ord v => Subst v -> Rule v -> (Term v,[Term v])
+applyRuleSubst σ (Rule _ c ps) = (c <. σ, map (apply σ) ps)
+
+ppTerm :: Show v => Term v -> String
+ppTerm (Var v) = show v
+ppTerm (Term k ts) = k ++ "(" ++ intercalate "," (map ppTerm ts) ++ ")"
+
+ppSubstitution :: Show v => Subst v -> String
+ppSubstitution σ = "{" ++ intercalate "," (map (\(v,t) -> show v ++ " -> " ++ ppTerm t) $ Map.toList σ) ++ "}"
 
 instance Show v => Show (EntailJ v) where
-  show (EntailJ rs g r) = show g ++ " " ++ nameR r
+  show (EntailJ rs g r s) = " |- " ++ ppTerm g ++ " " ++ ppSubstitution s
 
 
 type BEntailJ = EntailJ Name
 
 instance Ord v => Explain (EntailJ v) where
-  premises (EntailJ rs g _ s) = [[EntailJ rs (p <. s' <. s) r (s' <.> s) | p <- premisesR r] | (r,s') <- rules]
+  premises (EntailJ rs t (Rule n c []) σ) | t == c <. σ = [[]]
+                                          | Just σ' <- safe (unifyOne t (c <. σ)) = [[EntailJ rs (c <. σ <. σ') (Rule n c []) (σ' <.> σ)]]
+                                          | otherwise = []
+  premises (EntailJ rs g rl s) = [mkPs r s' | (r,s') <- rules]
     where rules = [(r,s) | (r,Just s) <- ruleTrials]
-          ruleTrials = map (\r -> (r,safeUnify $ conclusionR r)) rs
+          ruleTrials = map (\r -> (r,safeUnify $ conclusionR r <. s)) rs
           safeUnify  = safe . unifyOne g
+          mkPs r s' | [] <- premisesR r = [EntailJ rs (conclusionR r <. s <. s') r (s' <.> s)] -- [EntailJ rs (conclusionR r <. s <. s') r s']
+                    | otherwise         = [EntailJ rs (p <. s <. s') r (s' <.> s) | p <- premisesR r]
 
-  comeback (EntailJ rs g r s) ps = EntailJ rs (g <. s) r (s <.> s')
+  -- comeback (EntailJ rs g r s) [] = EntailJ rs (conclusionR r <. s) r s
+  comeback (EntailJ rs g r s) ps = EntailJ rs (g <. s') r s'
     where ss = map (bindings . conclusion) ps
-          s' = foldr (<.>) empty ss
+          s' = foldr compose s ss
+
+  proofs :: EntailJ v -> [Proof (EntailJ v)]
+  proofs j@(EntailJ {system = rs, goal = t, rule = r, bindings = σ}) = do
+    (r'@(Rule n c ps),σ') <- applySystem rs t
+    case applyRuleSubst σ' r' of
+      (c',[]) -> return $ Proof (j {goal = t <. σ', bindings = σ' <.> σ}) []
+      (c',ps') -> do
+        let pspfss = map proofs [j {goal = p,rule = Rule n c ps,bindings = σ'} | p <- ps']
+        -- let pspfss = do
+        --       p <- ps'
+        --       return $ proofs $ EntailJ rs p r' σ'
+        let pspfs = sequence pspfss
+        psfs <- pspfs
+        let pjs = map conclusion psfs
+        let pjsubs = map bindings pjs
+        let s = foldr compose σ pjsubs
+        return $ Proof (j {goal = t <. s, bindings = s}) psfs
+    -- when (null ps') 
+    -- let pspfss = map proofs [j {goal = p,rule = Rule n c ps,bindings = σ'} | p <- ps']
+    -- let pspfs = sequence pspfss
+    -- psfs <- pspfs
+    -- let pjs = map conclusion psfs
+
+    -- return $ Proof j psfs
+    -- if null ps
+    --   then return $ Proof 
+  -- proofs (EntailJ rs t (Rule n c []) σ) = undefined
 
 -- r1 = Rule "Ax1" (Term "P" [Var "x"]) []
 -- r2 = Rule "R1" (Term "Q" [Var "x",Var "y"]) [Term "P" [Var "x"],Term "P" [Var "y"]]
@@ -129,9 +192,10 @@ r1 = Rule "AliceBob" (Term "friends" [lit "Alice",lit "Bob"]) []
 r2 = Rule "BobCharlie" (Term "friends" [lit "Bob",lit "Charlie"]) []
 r3 = Rule "FriendsTrans" (Term "friends" [Var "x",Var "y"]) [Term "friends" [Var "x",Var "z"],Term "friends" [Var "z",Var "y"]]
 rs1 = [r1,r2,r3]
-ej1 = EntailJ rs1 (Term "friends" [lit "Alice",lit "Charlie"]) r1
-
-
+ej1 = EntailJ rs1 (Term "friends" [lit "Alice",lit "Charlie"]) r3 empty
+ej2 = EntailJ rs1 (Term "friends" [lit "Alice",Var "z"]) r3 empty
+ej3 = EntailJ rs1 (Term "friends" [lit "Alice",Var "c"]) r3 empty
+ej4 = mkEntailJ rs1 (Term "friends" [lit "Alice",Var "c"])
 -- class Substitution s where
 --   {-# MINIMAL empty, mapsTo, apply, compose #-}
 --   empty :: s
